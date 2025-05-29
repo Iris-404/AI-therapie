@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI-therapie Chat</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    #chatbox {
+      position: center;
+      bottom: 20px;
+      right: 20px;
+      width: 300px;
+      background: #f1f1f1;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      padding: 10px;
+    }
+    #chatlog {
+      height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+      padding: 5px;
+      background: white;
+    }
+    #userInput {
+      width: 70%;
+      padding: 5px;
+    }
+    button {
+      padding: 6px 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>AI-therapie</h1>
+<button type="button" onclick="init()">Start Webcam</button>
+<div id="webcam-container"></div>
+<div id="label-container"></div>
+
+<div id="chatbox">
+  <div id="chatlog"></div>
+  <input type="text" id="userInput" placeholder="Typ je bericht..." />
+  <button onclick="sendMessage()">Verstuur</button>
+</div>
+
+<!-- TensorFlow & Teachable Machine -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<script type="text/javascript">
+  const URL = "./my_model/";
+  let model, webcam, labelContainer, maxPredictions;
+  let lastEmotion = null;
+
+  async function init() {
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
+
+    model = await tmImage.load(modelURL, metadataURL);
+    maxPredictions = model.getTotalClasses();
+
+    const flip = true;
+    webcam = new tmImage.Webcam(200, 200, flip);
+    await webcam.setup();
+    await webcam.play();
+    window.requestAnimationFrame(loop);
+
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
+    labelContainer = document.getElementById("label-container");
+    for (let i = 0; i < maxPredictions; i++) {
+      labelContainer.appendChild(document.createElement("div"));
+    }
+  }
+
+  async function loop() {
+    webcam.update();
+    await predict();
+    window.requestAnimationFrame(loop);
+  }
+
+  async function predict() {
+    const prediction = await model.predict(webcam.canvas);
+
+    let highestProb = 0;
+    let detectedClass = "";
+
+    for (let i = 0; i < maxPredictions; i++) {
+      const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+      labelContainer.childNodes[i].innerHTML = classPrediction;
+
+      if (prediction[i].probability > highestProb) {
+        highestProb = prediction[i].probability;
+        detectedClass = prediction[i].className;
+      }
+    }
+
+    if (detectedClass !== lastEmotion && highestProb > 0.80) {
+      lastEmotion = detectedClass;
+
+      let botMessage = "";
+      if (detectedClass === "Boos") {
+        botMessage = "Je kijkt boos, wil je er iets over vertellen?";
+      } else if (detectedClass === "Bang") {
+        botMessage = "Je lijkt bang, is er iets gebeurd?";
+      } else if (detectedClass === "Verdrietig") {
+        botMessage = "Je lijkt verdrietig. Gaat alles wel goed?";
+      }
+
+      if (botMessage) {
+        addBotMessage(botMessage);
+      }
+    }
+  }
+
+  function sendMessage() {
+    const input = document.getElementById("userInput");
+    const message = input.value.trim();
+    if (message === "") return;
+
+    const chatlog = document.getElementById("chatlog");
+    const userMessage = document.createElement("div");
+    userMessage.textContent = "Jij: " + message;
+    chatlog.appendChild(userMessage);
+
+    // Bot-reactie: willekeurig uit 5 opties
+    const replies = [
+      "Dat klinkt moeilijk. Wil je er meer over vertellen?",
+      "Ik hoor je. Soms helpt het om het even van je af te praten.",
+      "Wat maakt dat je je zo voelt, denk je?",
+      "Je gevoelens zijn helemaal oké. Je hoeft dit niet alleen te dragen.",
+      "Ik ben hier om te luisteren."
+    ];
+    const randomReply = replies[Math.floor(Math.random() * replies.length)];
+
+    const botReply = document.createElement("div");
+    botReply.textContent = "Bot: " + randomReply;
+    chatlog.appendChild(botReply);
+
+    input.value = "";
+    chatlog.scrollTop = chatlog.scrollHeight;
+  }
+
+  function addBotMessage(message) {
+    const chatlog = document.getElementById("chatlog");
+    const botReply = document.createElement("div");
+    botReply.textContent = "Bot: " + message;
+    chatlog.appendChild(botReply);
+    chatlog.scrollTop = chatlog.scrollHeight;
+  }
+</script>
+
+</body>
+</html>
